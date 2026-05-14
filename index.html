@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DrivingDepth — Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+
+        /* === FULLPAGE SECTIONS === */
+        .page-container {
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .section {
+            position: absolute;
+            width: 100%;
+            height: 100vh;
+            top: 0;
+            left: 0;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .section-gallery { z-index: 2; }
+        .section-viewer { z-index: 1; transform: translateY(100vh); }
+
+        .page-container.on-viewer .section-gallery { transform: translateY(-100vh); }
+        .page-container.on-viewer .section-viewer { transform: translateY(0); }
+
+        /* === GALLERY SECTION === */
+        .gallery-header {
+            text-align: center;
+            padding: 10px 16px 2px;
+        }
+
+        .gallery-header h1 { font-size: 1.4rem; font-weight: 600; }
+
+        .badges {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 6px 0 4px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            border: 1px solid #444;
+            background: #2a2a4a;
+            color: #ddd;
+        }
+
+        .badge-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .gallery-hint {
+            text-align: center;
+            font-size: 0.7rem;
+            color: #555;
+            padding: 2px;
+        }
+
+        .carousel-viewport {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 130px);
+            overflow: hidden;
+            perspective: 1200px;
+        }
+
+        .carousel-item {
+            position: absolute;
+            width: 65%;
+            height: 88%;
+            top: 3%;
+            left: 17.5%;
+            transform-style: preserve-3d;
+            transition: transform 0.4s ease-out, opacity 0.4s ease-out, filter 0.4s ease-out;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #0d0d1a;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 2px;
+        }
+
+        .carousel-item.center { cursor: default; }
+
+        .carousel-item .scene-label {
+            display: none;
+        }
+
+        .method-row {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            border-radius: 6px;
+            background: #000;
+        }
+
+        .method-row .method-label {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            padding: 2px 6px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 3px;
+            font-size: 0.6rem;
+            font-weight: 500;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .img-wrapper {
+            position: relative;
+            height: 100%;
+            flex-shrink: 0;
+            aspect-ratio: 504 / 280;
+        }
+
+        .img-wrapper .img-cam-label {
+            position: absolute;
+            top: 3px;
+            right: 4px;
+            padding: 1px 5px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 3px;
+            font-size: 0.55rem;
+            color: #aaa;
+            pointer-events: none;
+        }
+
+        .img-strip {
+            display: flex;
+            height: 100%;
+            cursor: grab;
+        }
+
+        .img-strip.dragging { cursor: grabbing; }
+
+        .img-strip img {
+            height: 100%;
+            width: auto;
+            display: block;
+            flex-shrink: 0;
+            pointer-events: none;
+        }
+
+        .frame-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            padding: 4px 0 2px;
+        }
+
+        .frame-dot {
+            padding: 3px 9px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.08);
+            border: 1.5px solid rgba(255,255,255,0.15);
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .frame-dot:hover { background: rgba(255,255,255,0.15); color: #ccc; }
+        .frame-dot.active { background: rgba(100,180,255,0.2); border-color: rgba(100,180,255,0.6); color: #fff; }
+
+        .scroll-down-hint {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            z-index: 20;
+        }
+
+        .scroll-down-hint .down-arrow {
+            font-size: 3.5rem;
+            color: #aaa;
+            animation: bounce-down 2s infinite;
+        }
+
+        .scroll-down-hint .down-label {
+            font-size: 0.78rem;
+            color: #888;
+            letter-spacing: 0.3px;
+        }
+
+        .scroll-down-hint:hover .down-arrow { color: #fff; }
+        .scroll-down-hint:hover .down-label { color: #aaa; }
+
+        @keyframes bounce-down {
+            0%,100% { transform: translateY(0); opacity: 0.5; }
+            50% { transform: translateY(6px); opacity: 1; }
+        }
+
+        /* === VIEWER SECTION === */
+        .viewer-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px 8px;
+            flex-wrap: wrap;
+        }
+
+        .viewer-header .point-size-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .viewer-header .point-size-control input[type="range"] {
+            width: 80px;
+            accent-color: #7a7aff;
+        }
+
+        .viewer-header button {
+            padding: 6px 14px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: #2a2a4a;
+            color: #ddd;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .viewer-header button:hover { background: #3a3a6a; border-color: #666; }
+        .viewer-header button.active { background: #4a4a8a; border-color: #7a7aff; color: #fff; }
+
+        .viewer-container {
+            display: flex;
+            gap: 4px;
+            padding: 0 8px;
+            height: calc(100vh - 130px);
+            min-height: 400px;
+        }
+
+        .viewer-panel {
+            flex: 1;
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #0d0d1a;
+        }
+
+        .viewer-panel canvas { width: 100% !important; height: 100% !important; display: block; }
+
+        .viewer-label {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            padding: 4px 10px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .viewer-info {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            padding: 4px 10px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: #999;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(13,13,26,0.95);
+            z-index: 20;
+            transition: opacity 0.3s;
+        }
+
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+        .progress-bar { width: 200px; height: 4px; background: #333; border-radius: 2px; overflow: hidden; margin-top: 12px; }
+        .progress-bar-fill { height: 100%; background: #7a7aff; width: 0%; transition: width 0.1s; }
+        .loading-text { font-size: 0.85rem; color: #888; }
+
+        .viewer-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px;
+            position: relative;
+            z-index: 30;
+        }
+
+        .viewer-nav button {
+            padding: 5px 12px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: #2a2a4a;
+            color: #ddd;
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: all 0.2s;
+        }
+
+        .viewer-nav button:hover:not(.disabled) { background: #3a3a6a; border-color: #666; }
+
+        .viewer-nav button.disabled {
+            opacity: 0.3;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .viewer-nav .nav-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            cursor: pointer;
+            color: #aaa;
+            transition: color 0.2s;
+        }
+
+        .viewer-nav .nav-center:hover { color: #fff; }
+        .viewer-nav .nav-center .up-arrow { font-size: 1.2rem; line-height: 1; }
+        .viewer-nav .nav-center .up-label { font-size: 0.68rem; }
+
+        .mouse-hints {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            font-size: 0.75rem;
+            color: #666;
+            padding: 0 0 6px;
+        }
+
+        .mouse-hints span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .viewer-container { flex-direction: column; height: auto; }
+            .viewer-panel { height: 300px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container" id="pageContainer">
+        <!-- SECTION 1: GALLERY -->
+        <div class="section section-gallery" id="sectionGallery">
+            <div class="gallery-header">
+                <h1>DrivingDepth</h1>
+                <div class="badges">
+                    <span class="badge badge-disabled">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                        Code (Coming Soon)
+                    </span>
+                    <span class="badge badge-disabled">
+                        <svg width="20" height="20" viewBox="60 80 330 360" fill="currentColor"><path d="m 168.4 399.2c-5.8 0.1-11.2-3.3-13.5-8.7-2.2-5.3-0.6-9 4.2-15.9 7-10.4 78.8-96.6 78.8-96.6l-15.9-14.9c-13.4-13.4-14-31.3-1.5-43.8l18.5-17.6-51.6-63.4c-4-4.3-6.5-11.8-4.2-17.1 2.3-5.5 7.7-9.1 13.7-9.1 3.8 0.1 7.4 1.9 9.8 4.9l61.4 57 94.6-90.1c3.2-3.1 7.4-4.8 11.9-4.9 1.6 0 3.2 0.2 4.7 0.7 5.8 1.8 10.2 6.4 11.9 12.3 1.3 5.5-0.3 11.2-4.2 15.3l-83.1 100 14.9 13.8c11.1 10 11.2 27.4 0.1 37.5l-16.3 15.6 56.3 66.4 0.1 0.1 0.1 0.1c5 6.5 7.4 11.6 4.8 17.9-3.1 6-8.7 10.3-15.3 11.9-0.7 0.1-1.4 0.1-2 0.1-4.4-0.3-8.6-2.1-11.8-5.2l-0.1-0.1-0.1-0.1-65.2-59.1-89.9 86.2c0 0-5.3 6.5-11 6.6z"/></svg>
+                        arXiv (Coming Soon)
+                    </span>
+                    <span class="badge" id="btnDemo" style="cursor:pointer;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Demo
+                    </span>
+                </div>
+            </div>
+            <div class="gallery-hint">Drag or scroll on images to cycle cameras · Click sides to switch scenes</div>
+            <div class="carousel-viewport" id="galleryViewport"></div>
+            <div class="scroll-down-hint" id="scrollDownHint">
+                <span class="down-label">View 3D Reconstruction of This Scene</span>
+                <span class="down-arrow">&#x25BC;</span>
+            </div>
+        </div>
+
+        <!-- SECTION 2: POINT CLOUD VIEWER -->
+        <div class="section section-viewer" id="sectionViewer">
+            <div class="viewer-nav">
+                <button id="btnPrevScene">&#x25C0; Previous Scene</button>
+                <div class="nav-center" id="btnBack">
+                    <span class="up-arrow">&#x25B2;</span>
+                    <span class="up-label">Back to Gallery</span>
+                </div>
+                <button id="btnNextScene">Next Scene &#x25B6;</button>
+            </div>
+            <div class="viewer-header">
+                <div class="point-size-control">
+                    <span>Point Size:</span>
+                    <input type="range" id="pointSize" min="1" max="5" step="0.1" value="3">
+                    <span id="pointSizeLabel">3.0</span>
+                </div>
+                <button id="btnGT" class="active">Hide GT</button>
+                <button id="btnAutopilot" class="active">Autopilot: ON</button>
+                <!-- <button id="btnSaveView">Save View</button> -->
+            </div>
+            <div class="mouse-hints">
+                <span>
+                    <svg width="18" height="18" viewBox="0 0 24 28" fill="none"><path d="M4 10C4 6 4 4 12 4C20 4 20 6 20 10V18C20 22 18 24 12 24C6 24 4 22 4 18V10Z" stroke="#888" stroke-width="1.5"/><line x1="12" y1="4" x2="12" y2="14" stroke="#888" stroke-width="1"/><path d="M4 10C4 6 4 4 12 4V14H4V10Z" fill="#7a7aff" fill-opacity="0.6"/></svg>
+                    Rotate
+                </span>
+                <span>
+                    <svg width="18" height="18" viewBox="0 0 24 28" fill="none"><path d="M4 10C4 6 4 4 12 4C20 4 20 6 20 10V18C20 22 18 24 12 24C6 24 4 22 4 18V10Z" stroke="#888" stroke-width="1.5"/><line x1="12" y1="4" x2="12" y2="14" stroke="#888" stroke-width="1"/><path d="M20 10C20 6 20 4 12 4V14H20V10Z" fill="#7a7aff" fill-opacity="0.6"/></svg>
+                    Pan
+                </span>
+                <span>
+                    <svg width="18" height="18" viewBox="0 0 24 28" fill="none"><path d="M4 10C4 6 4 4 12 4C20 4 20 6 20 10V18C20 22 18 24 12 24C6 24 4 22 4 18V10Z" stroke="#888" stroke-width="1.5"/><line x1="12" y1="4" x2="12" y2="14" stroke="#888" stroke-width="1"/><rect x="10" y="5" width="4" height="7" rx="2" fill="#7a7aff" fill-opacity="0.6"/></svg>
+                    Zoom
+                </span>
+            </div>
+            <div class="viewer-container" id="viewerContainer"></div>
+        </div>
+    </div>
+
+    <!-- ===== GALLERY SCRIPT ===== -->
+    <script>
+    (function() {
+        const CAMERAS = [
+            { id: 'CAM_FRONT', label: 'Front' },
+            { id: 'CAM_FRONT_RIGHT', label: 'Front Right' },
+            { id: 'CAM_BACK_RIGHT', label: 'Back Right' },
+            { id: 'CAM_BACK', label: 'Back' },
+            { id: 'CAM_BACK_LEFT', label: 'Back Left' },
+            { id: 'CAM_FRONT_LEFT', label: 'Front Left' },
+        ];
+
+        const SCENES = [
+            {
+                id: '23', label: 'Scene 23',
+                prefix: 'n015-2018-10-02-11-23-23+0800',
+                timestamps: {
+                    CAM_FRONT: ['1538450962612460','1538450963112460','1538450963612460','1538450964112460'],
+                    CAM_FRONT_RIGHT: ['1538450962620339','1538450963120339','1538450963620339','1538450964120339'],
+                    CAM_BACK_RIGHT: ['1538450962627893','1538450963127893','1538450963627893','1538450964127893'],
+                    CAM_BACK: ['1538450962637525','1538450963137525','1538450963637525','1538450964137525'],
+                    CAM_BACK_LEFT: ['1538450962647432','1538450963147423','1538450963647423','1538450964147423'],
+                    CAM_FRONT_LEFT: ['1538450962604844','1538450963104844','1538450963604844','1538450964104844'],
+                }
+            },
+            {
+                id: '03', label: 'Scene 03',
+                prefix: 'n008-2018-08-01-16-03-27-0400',
+                timestamps: {
+                    CAM_FRONT: ['1533154284512404','1533154285012404','1533154285512404','1533154285912404'],
+                    CAM_FRONT_RIGHT: ['1533154284520482','1533154285020482','1533154285520482','1533154285920482'],
+                    CAM_BACK_RIGHT: ['1533154284528113','1533154285028113','1533154285528113','1533154285928113'],
+                    CAM_BACK: ['1533154284537558','1533154285037558','1533154285537558','1533154285937558'],
+                    CAM_BACK_LEFT: ['1533154284547405','1533154285047405','1533154285547405','1533154285947405'],
+                    CAM_FRONT_LEFT: ['1533154284504799','1533154285004799','1533154285504799','1533154285904799'],
+                }
+            },
+            {
+                id: '30', label: 'Scene 30',
+                prefix: 'n008-2018-08-01-16-03-27-0400',
+                timestamps: {
+                    CAM_FRONT: ['1533153900862404','1533153901362404','1533153901862404','1533153902362404'],
+                    CAM_FRONT_RIGHT: ['1533153900870482','1533153901370482','1533153901870482','1533153902370482'],
+                    CAM_BACK_RIGHT: ['1533153900878113','1533153901378113','1533153901878113','1533153902378113'],
+                    CAM_BACK: ['1533153900887558','1533153901387558','1533153901887558','1533153902387558'],
+                    CAM_BACK_LEFT: ['1533153900897405','1533153901397405','1533153901897422','1533153902397405'],
+                    CAM_FRONT_LEFT: ['1533153900854799','1533153901354799','1533153901854799','1533153902354799'],
+                }
+            },
+        ];
+
+        const METHODS = [
+            { id: 'org_img', label: 'Original', pathFn: (s) => `data/images/${s}`, ext: 'jpg' },
+            { id: 'org', label: 'DepthAnything3 (Our codebase)', pathFn: (s) => `data/depth_vis/org/${s}`, ext: 'png' },
+            { id: 'ma', label: 'MapAnything (w/ lidar prompt)', pathFn: (s) => `data/depth_vis/ma/${s}`, ext: 'png' },
+            { id: 'da', label: 'DrivingDepth (Ours, w/ lidar prompt)', pathFn: (s) => `data/depth_vis/da/${s}`, ext: 'png' },
+        ];
+
+        const NUM_FRAMES = 4, NUM_CAMS = CAMERAS.length, REPEATS = 5, CENTER_OFFSET = NUM_CAMS * 2;
+        const sceneFrames = new Array(SCENES.length).fill(0);
+
+        function getImagePath(method, scene, camId, frameIdx) {
+            const ts = scene.timestamps[camId][frameIdx];
+            return `${method.pathFn(scene.id)}/${scene.prefix}__${camId}__${ts}.${method.ext}`;
+        }
+
+        const viewport = document.getElementById('galleryViewport');
+        const items = [], strips = [], sceneDots = [];
+
+        for (let s = 0; s < SCENES.length; s++) {
+            const scene = SCENES[s];
+            const item = document.createElement('div');
+            item.className = 'carousel-item';
+            item.dataset.index = s;
+            item.innerHTML = `<div class="scene-label">${scene.label}</div>`;
+
+            const sceneStrips = [];
+            METHODS.forEach((method) => {
+                const row = document.createElement('div');
+                row.className = 'method-row';
+                const ml = document.createElement('div');
+                ml.className = 'method-label';
+                ml.textContent = method.label;
+                row.appendChild(ml);
+
+                const strip = document.createElement('div');
+                strip.className = 'img-strip';
+                for (let r = 0; r < REPEATS; r++) {
+                    CAMERAS.forEach((cam) => {
+                        const w = document.createElement('div');
+                        w.className = 'img-wrapper';
+                        const img = document.createElement('img');
+                        img.src = getImagePath(method, scene, cam.id, sceneFrames[s]);
+                        const lb = document.createElement('span');
+                        lb.className = 'img-cam-label';
+                        lb.textContent = cam.label;
+                        w.appendChild(img);
+                        w.appendChild(lb);
+                        strip.appendChild(w);
+                    });
+                }
+                row.appendChild(strip);
+                item.appendChild(row);
+                sceneStrips.push({ el: strip, row });
+            });
+
+            const dotsContainer = document.createElement('div');
+            dotsContainer.className = 'frame-dots';
+            const dots = [];
+            for (let f = 0; f < NUM_FRAMES; f++) {
+                const dot = document.createElement('div');
+                dot.className = 'frame-dot' + (f === 0 ? ' active' : '');
+                dot.textContent = `Frame: ${f + 1}`;
+                const si = s, fi = f;
+                dot.addEventListener('click', (e) => { e.stopPropagation(); switchFrame(si, fi); });
+                dot.addEventListener('mouseenter', () => { previewFrame(si, fi); });
+                dotsContainer.appendChild(dot);
+                dots.push(dot);
+            }
+            const si = s;
+            dotsContainer.addEventListener('mouseleave', () => { restoreFrame(si); });
+            item.appendChild(dotsContainer);
+
+            sceneDots.push(dots);
+            strips.push(sceneStrips);
+            viewport.appendChild(item);
+            items.push(item);
+        }
+
+        function switchFrame(sceneIdx, f) {
+            if (f === sceneFrames[sceneIdx]) return;
+            sceneFrames[sceneIdx] = f;
+            sceneDots[sceneIdx].forEach((d, i) => d.classList.toggle('active', i === f));
+            rebuildSceneStrips(sceneIdx);
+        }
+
+        function previewFrame(sceneIdx, f) {
+            if (f === sceneFrames[sceneIdx]) return;
+            showFrameImages(sceneIdx, f);
+        }
+
+        function restoreFrame(sceneIdx) {
+            showFrameImages(sceneIdx, sceneFrames[sceneIdx]);
+        }
+
+        function showFrameImages(sceneIdx, frame) {
+            const scene = SCENES[sceneIdx];
+            strips[sceneIdx].forEach((stripInfo, mi) => {
+                const method = METHODS[mi];
+                const wrappers = stripInfo.el.querySelectorAll('.img-wrapper');
+                let idx = 0;
+                for (let r = 0; r < REPEATS; r++) {
+                    CAMERAS.forEach((cam) => {
+                        wrappers[idx].querySelector('img').src = getImagePath(method, scene, cam.id, frame);
+                        idx++;
+                    });
+                }
+            });
+        }
+
+        function rebuildSceneStrips(sceneIdx) {
+            showFrameImages(sceneIdx, sceneFrames[sceneIdx]);
+        }
+
+        // Strip positions & dragging
+        const stripPositions = new Array(SCENES.length).fill(0);
+
+        function updateStrips(sceneIdx) {
+            const pos = stripPositions[sceneIdx];
+            strips[sceneIdx].forEach((s) => { s.el.style.transform = `translateX(${-pos}px)`; });
+        }
+
+        function initStripPositions() {
+            for (let s = 0; s < SCENES.length; s++) {
+                const fw = strips[s][0].el.children[0];
+                const ww = (fw && fw.offsetWidth > 0) ? fw.offsetWidth : 504;
+                const containerW = strips[s][0].row.clientWidth;
+                stripPositions[s] = CENTER_OFFSET * ww - (containerW - ww) / 2;
+                updateStrips(s);
+            }
+        }
+
+        const firstImg = strips[0][0].el.querySelector('img');
+        if (firstImg.complete) initStripPositions();
+        else firstImg.addEventListener('load', initStripPositions, { once: true });
+
+        function wrapPosition(sceneIdx) {
+            const ww = strips[sceneIdx][0].el.children[0]?.offsetWidth || 504;
+            const oneLoop = NUM_CAMS * ww;
+            if (stripPositions[sceneIdx] < oneLoop) stripPositions[sceneIdx] += oneLoop;
+            else if (stripPositions[sceneIdx] >= oneLoop * (REPEATS - 1)) stripPositions[sceneIdx] -= oneLoop;
+        }
+
+        let stripDragging = false, stripDragStartX = 0, stripDragScene = 0, stripDragStartPos = 0;
+
+        function onStripDragStart(e, sceneIdx) {
+            if (sceneIdx !== currentIndex) return;
+            stripDragging = true;
+            stripDragScene = sceneIdx;
+            stripDragStartX = e.clientX || e.touches[0].clientX;
+            stripDragStartPos = stripPositions[sceneIdx];
+            strips[sceneIdx].forEach(s => s.el.classList.add('dragging'));
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        for (let s = 0; s < SCENES.length; s++) {
+            strips[s].forEach((si) => {
+                si.row.addEventListener('mousedown', (e) => onStripDragStart(e, s));
+                si.row.addEventListener('touchstart', (e) => onStripDragStart(e, s));
+            });
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (!stripDragging) return;
+            stripPositions[stripDragScene] = stripDragStartPos - (e.clientX - stripDragStartX);
+            wrapPosition(stripDragScene); updateStrips(stripDragScene);
+        });
+        window.addEventListener('touchmove', (e) => {
+            if (!stripDragging) return;
+            stripPositions[stripDragScene] = stripDragStartPos - (e.touches[0].clientX - stripDragStartX);
+            wrapPosition(stripDragScene); updateStrips(stripDragScene);
+        });
+        window.addEventListener('mouseup', () => { if (stripDragging) { stripDragging = false; strips[stripDragScene].forEach(s => s.el.classList.remove('dragging')); wrapPosition(stripDragScene); updateStrips(stripDragScene); } });
+        window.addEventListener('touchend', () => { if (stripDragging) { stripDragging = false; strips[stripDragScene].forEach(s => s.el.classList.remove('dragging')); wrapPosition(stripDragScene); updateStrips(stripDragScene); } });
+        document.addEventListener('mouseleave', () => { if (stripDragging) { stripDragging = false; strips[stripDragScene].forEach(s => s.el.classList.remove('dragging')); wrapPosition(stripDragScene); updateStrips(stripDragScene); } });
+
+        // Carousel
+        let currentIndex = 1, offset = 1;
+
+        function updateCarousel(animated) {
+            items.forEach((item, i) => {
+                const diff = i - offset, absDiff = Math.abs(diff);
+                const tZ = -absDiff * 300, tX = diff * 55, rY = -diff * 12;
+                const sc = Math.max(0.65, 1 - absDiff * 0.12);
+                const op = Math.max(0.35, 1 - absDiff * 0.35);
+                const bl = absDiff > 0.5 ? Math.min(absDiff * 4, 10) : 0;
+                item.style.transition = animated ? 'transform 0.4s ease-out, opacity 0.4s ease-out, filter 0.4s ease-out' : 'none';
+                item.style.transform = `translateX(${tX}%) translateZ(${tZ}px) rotateY(${rY}deg) scale(${sc})`;
+                item.style.opacity = op;
+                item.style.filter = `blur(${bl}px)`;
+                item.style.zIndex = Math.round(100 - absDiff * 10);
+                item.classList.toggle('center', Math.round(offset) === i);
+            });
+        }
+
+        function snapTo(index) {
+            currentIndex = Math.max(0, Math.min(SCENES.length - 1, index));
+            offset = currentIndex;
+            updateCarousel(true);
+            window.activeSceneId = SCENES[currentIndex].id;
+        }
+
+        window.activeSceneId = SCENES[1].id;
+        window.SCENES_LIST = SCENES;
+        window.snapToScene = snapTo;
+        updateCarousel(false);
+
+        items.forEach((item) => {
+            item.addEventListener('click', (e) => {
+                if (stripDragging) return;
+                const idx = parseInt(item.dataset.index);
+                if (idx !== currentIndex) snapTo(idx);
+            });
+        });
+
+        // Scene drag
+        let frameDragging = false, frameDragStartX = 0, frameDragStartOffset = 0;
+        viewport.addEventListener('mousedown', (e) => {
+            if (stripDragging || e.target.closest('.method-row')) return;
+            frameDragging = true; frameDragStartX = e.clientX; frameDragStartOffset = offset; e.preventDefault();
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!frameDragging) return;
+            offset = frameDragStartOffset - (e.clientX - frameDragStartX) / (viewport.clientWidth * 0.4);
+            offset = Math.max(-0.3, Math.min(SCENES.length - 1 + 0.3, offset));
+            updateCarousel(false);
+        });
+        window.addEventListener('mouseup', () => { if (frameDragging) { frameDragging = false; snapTo(Math.round(offset)); } });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') snapTo(currentIndex - 1);
+            if (e.key === 'ArrowRight') snapTo(currentIndex + 1);
+        });
+
+        // Scroll on strips
+        viewport.addEventListener('wheel', (e) => {
+            const onStrip = e.target.closest('.method-row');
+            if (!onStrip) return;
+            e.preventDefault(); e.stopPropagation();
+            const dx = e.deltaX || e.deltaY;
+            if (Math.abs(dx) < 2) return;
+            stripPositions[currentIndex] += dx * 1.5;
+            wrapPosition(currentIndex); updateStrips(currentIndex);
+        }, { passive: false });
+
+        // Demo easter egg
+        document.getElementById('btnDemo').addEventListener('click', () => {
+            const toast = document.createElement('div');
+            toast.textContent = 'You are here now';
+            toast.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);padding:10px 24px;background:#7a7aff;color:#fff;border-radius:0 0 8px 8px;font-size:0.9rem;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;';
+            document.body.appendChild(toast);
+            requestAnimationFrame(() => toast.style.opacity = '1');
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
+        });
+    })();
+    </script>
+
+    <!-- ===== FULLPAGE SCROLL LOGIC ===== -->
+    <script>
+    (function() {
+        const container = document.getElementById('pageContainer');
+        let onViewer = false;
+        let scrollAccumulator = 0;
+        const THRESHOLD = 600;
+        let lastScrollTime = 0;
+        const DECAY_MS = 800;
+
+        function goToViewer() {
+            if (onViewer) return;
+            onViewer = true;
+            container.classList.add('on-viewer');
+            scrollAccumulator = 0;
+            window.dispatchEvent(new CustomEvent('viewer-enter'));
+        }
+
+        function goToGallery() {
+            if (!onViewer) return;
+            onViewer = false;
+            container.classList.remove('on-viewer');
+            scrollAccumulator = 0;
+            const sceneId = window.activeSceneId || '03';
+            const idx = window.SCENES_LIST.findIndex(s => s.id === sceneId);
+            if (idx >= 0 && window.snapToScene) window.snapToScene(idx);
+        }
+
+        document.getElementById('sectionGallery').addEventListener('wheel', (e) => {
+            if (e.target.closest('.method-row')) return;
+            if (e.deltaY <= 0) { scrollAccumulator = 0; return; }
+
+            const now = Date.now();
+            if (now - lastScrollTime > DECAY_MS) scrollAccumulator = 0;
+            lastScrollTime = now;
+
+            scrollAccumulator += e.deltaY;
+            if (scrollAccumulator >= THRESHOLD) goToViewer();
+        }, { passive: true });
+
+        document.getElementById('sectionViewer').addEventListener('wheel', (e) => {
+            if (e.target.closest('.viewer-panel')) return;
+            if (e.deltaY >= 0) { scrollAccumulator = 0; return; }
+
+            const now = Date.now();
+            if (now - lastScrollTime > DECAY_MS) scrollAccumulator = 0;
+            lastScrollTime = now;
+
+            scrollAccumulator += Math.abs(e.deltaY);
+            if (scrollAccumulator >= THRESHOLD) goToGallery();
+        }, { passive: true });
+
+        document.getElementById('btnBack').addEventListener('click', goToGallery);
+
+        const btnPrev = document.getElementById('btnPrevScene');
+        const btnNext = document.getElementById('btnNextScene');
+
+        function updateSceneNav() {
+            const scenes = window.SCENES_LIST || [];
+            const idx = scenes.findIndex(s => s.id === window.activeSceneId);
+            btnPrev.classList.toggle('disabled', idx <= 0);
+            btnNext.classList.toggle('disabled', idx >= scenes.length - 1);
+        }
+
+        btnPrev.addEventListener('click', () => {
+            const scenes = window.SCENES_LIST || [];
+            const idx = scenes.findIndex(s => s.id === window.activeSceneId);
+            if (idx > 0) {
+                window.snapToScene(idx - 1);
+                window.dispatchEvent(new CustomEvent('viewer-enter'));
+                updateSceneNav();
+            }
+        });
+
+        btnNext.addEventListener('click', () => {
+            const scenes = window.SCENES_LIST || [];
+            const idx = scenes.findIndex(s => s.id === window.activeSceneId);
+            if (idx < scenes.length - 1) {
+                window.snapToScene(idx + 1);
+                window.dispatchEvent(new CustomEvent('viewer-enter'));
+                updateSceneNav();
+            }
+        });
+
+        window.addEventListener('viewer-enter', updateSceneNav);
+        updateSceneNav();
+
+        document.getElementById('scrollDownHint').addEventListener('click', goToViewer);
+    })();
+    </script>
+
+    <!-- ===== POINT CLOUD VIEWER ===== -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+
+        class PointCloudViewer {
+            constructor(container, label) {
+                this.container = container;
+                this.scene = new THREE.Scene();
+                this.points = null;
+                this.gtPoints = null;
+                const w = container.clientWidth || 400;
+                const h = container.clientHeight || 300;
+                this.camera = new THREE.PerspectiveCamera(60, w / h, 0.01, 100);
+                this.camera.position.set(0, 0, 2);
+                this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
+                this.renderer.setPixelRatio(1);
+                this.renderer.setSize(w, h);
+                container.appendChild(this.renderer.domElement);
+                this.controls = new TrackballControls(this.camera, this.renderer.domElement);
+                this.controls.rotateSpeed = 0.8;
+                this.controls.zoomSpeed = 0.6;
+                this.controls.panSpeed = 0.4;
+                this.controls.dynamicDampingFactor = 0.25;
+                this.scene.add(new THREE.AmbientLight(0xffffff, 1));
+            }
+
+            loadFromBinary(buffer) {
+                const view = new DataView(buffer);
+                const numPoints = view.getUint32(0, true);
+                const posOffset = 4, colOffset = posOffset + numPoints * 12;
+                const positions = new Float32Array(buffer, posOffset, numPoints * 3);
+                const colors = new Uint8Array(buffer, colOffset, numPoints * 3);
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const colorsNorm = new Float32Array(colors.length);
+                for (let i = 0; i < colors.length; i++) colorsNorm[i] = colors[i] / 255;
+                geometry.setAttribute('color', new THREE.BufferAttribute(colorsNorm, 3));
+                const material = new THREE.PointsMaterial({ size: 3.0, vertexColors: true, sizeAttenuation: false });
+                if (this.points) this.scene.remove(this.points);
+                this.points = new THREE.Points(geometry, material);
+                this.scene.add(this.points);
+                return numPoints;
+            }
+
+            loadGT(buffer) {
+                const view = new DataView(buffer);
+                const numPoints = view.getUint32(0, true);
+                const posOffset = 4, colOffset = posOffset + numPoints * 12;
+                const positions = new Float32Array(buffer, posOffset, numPoints * 3);
+                const colors = new Uint8Array(buffer, colOffset, numPoints * 3);
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const colorsNorm = new Float32Array(colors.length);
+                for (let i = 0; i < colors.length; i++) colorsNorm[i] = colors[i] / 255;
+                geometry.setAttribute('color', new THREE.BufferAttribute(colorsNorm, 3));
+                const material = new THREE.PointsMaterial({ size: 2.0, vertexColors: true, sizeAttenuation: false });
+                if (this.gtPoints) this.scene.remove(this.gtPoints);
+                this.gtPoints = new THREE.Points(geometry, material);
+                this.gtPoints.visible = false;
+                this.scene.add(this.gtPoints);
+            }
+
+            clear() {
+                if (this.points) { this.scene.remove(this.points); this.points = null; }
+                if (this.gtPoints) { this.scene.remove(this.gtPoints); this.gtPoints = null; }
+            }
+
+            setPointSize(size) {
+                if (this.points) this.points.material.size = size;
+                if (this.gtPoints) this.gtPoints.material.size = size + 1;
+            }
+            setGTVisible(v) { if (this.gtPoints) this.gtPoints.visible = v; }
+            resize() {
+                const w = this.container.clientWidth, h = this.container.clientHeight;
+                if (w === 0 || h === 0) return;
+                this.camera.aspect = w / h;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(w, h);
+                this.controls.handleResize();
+            }
+            render() { this.controls.update(); this.renderer.render(this.scene, this.camera); }
+        }
+
+        async function fetchBinary(url, onProgress) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Failed: ${response.status}`);
+            const total = parseInt(response.headers.get('content-length') || '0');
+            const reader = response.body.getReader();
+            const chunks = []; let loaded = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value); loaded += value.length;
+                if (onProgress && total) onProgress(loaded / total);
+            }
+            const compressed = new Uint8Array(loaded); let off = 0;
+            for (const c of chunks) { compressed.set(c, off); off += c.length; }
+            const ds = new DecompressionStream('gzip');
+            const writer = ds.writable.getWriter();
+            writer.write(compressed); writer.close();
+            return await new Response(ds.readable).arrayBuffer();
+        }
+
+        // Build viewer panels
+        const viewerContainer = document.getElementById('viewerContainer');
+        const PANEL_CONFIGS = [
+            { label: 'DepthAnything3 (Our codebase)', prefix: 'org' },
+            { label: 'DrivingDepth (Ours, w/ lidar prompt)', prefix: 'da' },
+            { label: 'MapAnything (w/ lidar prompt)', prefix: 'ma' },
+        ];
+
+        const viewers = [];
+        for (const cfg of PANEL_CONFIGS) {
+            const panel = document.createElement('div');
+            panel.className = 'viewer-panel';
+            panel.innerHTML = `<div class="viewer-label">${cfg.label}</div><div class="viewer-info"></div><div class="loading-overlay"><div class="loading-text">Loading...</div><div class="progress-bar"><div class="progress-bar-fill"></div></div></div>`;
+            viewerContainer.appendChild(panel);
+            const viewer = new PointCloudViewer(panel, cfg.label);
+            viewer.panel = panel;
+            viewer.prefix = cfg.prefix;
+            viewers.push(viewer);
+        }
+
+        // Sync controls
+        let isSyncing = false;
+        function syncControls(src) {
+            if (isSyncing) return;
+            isSyncing = true;
+            for (const v of viewers) {
+                if (v === src) continue;
+                v.camera.position.copy(src.camera.position);
+                v.camera.up.copy(src.camera.up);
+                v.camera.quaternion.copy(src.camera.quaternion);
+                v.controls.target.copy(src.controls.target);
+                v.controls.update();
+            }
+            isSyncing = false;
+        }
+        for (const v of viewers) v.controls.addEventListener('change', () => syncControls(v));
+
+        // Scene loading state
+        let loadedScene = null;
+        let gtLoaded = false, gtVisible = false;
+        let isLoading = false;
+
+        async function loadScene(sceneId) {
+            if (isLoading || loadedScene === sceneId) return;
+            isLoading = true;
+            gtLoaded = false;
+            gtVisible = false;
+            document.getElementById('btnGT').classList.remove('active');
+            document.getElementById('btnGT').textContent = 'Show GT';
+
+            for (const v of viewers) {
+                v.clear();
+                const overlay = v.panel.querySelector('.loading-overlay');
+                overlay.classList.remove('hidden');
+                overlay.querySelector('.loading-text').textContent = 'Loading...';
+                overlay.querySelector('.progress-bar-fill').style.width = '0%';
+                overlay.querySelector('.progress-bar-fill').style.background = '#7a7aff';
+            }
+
+            for (const v of viewers) {
+                const file = `data/${v.prefix}${sceneId}.bin.gz`;
+                const overlay = v.panel.querySelector('.loading-overlay');
+                const fill = overlay.querySelector('.progress-bar-fill');
+                const info = v.panel.querySelector('.viewer-info');
+                try {
+                    const buf = await fetchBinary(file, (p) => { fill.style.width = `${(p*100).toFixed(0)}%`; });
+                    const n = v.loadFromBinary(buf);
+                    info.textContent = `${(n/1000).toFixed(0)}K points`;
+                    overlay.classList.add('hidden');
+                } catch (e) {
+                    overlay.querySelector('.loading-text').textContent = `Error: ${e.message}`;
+                    fill.style.background = '#ff4444';
+                }
+            }
+
+            loadedScene = sceneId;
+            isLoading = false;
+            loadAutopilotConfig(sceneId);
+
+            // Auto-load and show GT
+            await loadGT();
+            gtVisible = true;
+            for (const v of viewers) v.setGTVisible(true);
+            document.getElementById('btnGT').classList.add('active');
+            document.getElementById('btnGT').textContent = 'Hide GT';
+        }
+
+        // Autopilot
+        let autopilot = {
+            state: 'cycling', keyframes: [], currentIndex: 0,
+            transitionDuration: 5.0, pauseAtKeyframe: 2.0, idleTimeout: 3.0, returnSpeed: 0.3, returnDuration: 2.0,
+            progress: 0, pauseTimer: 0, idleTimer: 0, lastTime: performance.now() / 1000,
+            fromPos: new THREE.Vector3(), fromTarget: new THREE.Vector3(), fromUp: new THREE.Vector3(),
+            toPos: new THREE.Vector3(), toTarget: new THREE.Vector3(), toUp: new THREE.Vector3(),
+            fromQuat: new THREE.Quaternion(), toQuat: new THREE.Quaternion(),
+        };
+        let autopilotEnabled = true;
+
+        function setCameraFromKeyframe(kf) {
+            const s = viewers[0];
+            s.camera.position.set(...kf.position);
+            s.camera.up.set(...kf.up);
+            s.controls.target.set(...kf.target);
+            s.controls.update();
+            syncControls(s);
+        }
+
+        function findNearestKeyframe() {
+            const cam = viewers[0].camera;
+            let min = Infinity, nearest = 0;
+            for (let i = 0; i < autopilot.keyframes.length; i++) {
+                const kf = autopilot.keyframes[i];
+                const d = cam.position.distanceToSquared(new THREE.Vector3(...kf.position));
+                if (d < min) { min = d; nearest = i; }
+            }
+            return nearest;
+        }
+
+        function startTransitionTo(idx) {
+            const s = viewers[0], kf = autopilot.keyframes[idx];
+            autopilot.fromPos.copy(s.camera.position);
+            autopilot.fromTarget.copy(s.controls.target);
+            autopilot.fromUp.copy(s.camera.up);
+            autopilot.toPos.set(...kf.position);
+            autopilot.toTarget.set(...kf.target);
+            autopilot.toUp.set(...kf.up);
+            const fm = new THREE.Matrix4().lookAt(autopilot.fromPos, autopilot.fromTarget, autopilot.fromUp);
+            autopilot.fromQuat = new THREE.Quaternion().setFromRotationMatrix(fm);
+            const tm = new THREE.Matrix4().lookAt(autopilot.toPos, autopilot.toTarget, autopilot.toUp);
+            autopilot.toQuat = new THREE.Quaternion().setFromRotationMatrix(tm);
+            autopilot.currentIndex = idx;
+            autopilot.progress = 0;
+        }
+
+        function easeInOut(t) { return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2; }
+
+        function applyCameraInterp(src, t) {
+            src.camera.position.lerpVectors(autopilot.fromPos, autopilot.toPos, t);
+            src.controls.target.copy(new THREE.Vector3().lerpVectors(autopilot.fromTarget, autopilot.toTarget, t));
+            const q = new THREE.Quaternion().slerpQuaternions(autopilot.fromQuat, autopilot.toQuat, t);
+            src.camera.up.copy(new THREE.Vector3(0, 1, 0).applyQuaternion(q));
+            src.controls.update();
+            syncControls(src);
+        }
+
+        function updateAutopilot() {
+            if (autopilot.keyframes.length < 2) return;
+            const now = performance.now() / 1000;
+            const dt = now - autopilot.lastTime;
+            autopilot.lastTime = now;
+            const src = viewers[0];
+
+            if (autopilot.state === 'cycling') {
+                autopilot.progress += dt / autopilot.transitionDuration;
+                if (autopilot.progress >= 1) { autopilot.progress = 1; autopilot.state = 'pausing'; autopilot.pauseTimer = 0; }
+                applyCameraInterp(src, easeInOut(Math.min(autopilot.progress, 1)));
+            } else if (autopilot.state === 'pausing') {
+                autopilot.pauseTimer += dt;
+                if (autopilot.pauseTimer >= autopilot.pauseAtKeyframe) {
+                    startTransitionTo((autopilot.currentIndex + 1) % autopilot.keyframes.length);
+                    autopilot.state = 'cycling';
+                }
+            } else if (autopilot.state === 'idle_wait') {
+                if (!autopilotEnabled) return;
+                autopilot.idleTimer += dt;
+                if (autopilot.idleTimer >= autopilot.idleTimeout) {
+                    const next = (findNearestKeyframe() + 1) % autopilot.keyframes.length;
+                    startTransitionTo(next);
+                    autopilot.returnDuration = Math.max(autopilot.fromPos.distanceTo(autopilot.toPos) / autopilot.returnSpeed, 0.5);
+                    autopilot.state = 'returning';
+                }
+            } else if (autopilot.state === 'returning') {
+                autopilot.progress += dt / autopilot.returnDuration;
+                if (autopilot.progress >= 1) {
+                    autopilot.progress = 1;
+                    startTransitionTo((autopilot.currentIndex + 1) % autopilot.keyframes.length);
+                    autopilot.state = 'cycling';
+                }
+                applyCameraInterp(src, easeInOut(Math.min(autopilot.progress, 1)));
+            }
+        }
+
+        // User interaction detection
+        let userInteracting = false;
+        for (const v of viewers) {
+            const el = v.renderer.domElement;
+            el.addEventListener('mousedown', () => { userInteracting = true; if (['cycling','pausing','returning'].includes(autopilot.state)) autopilot.state = 'user_control'; });
+            el.addEventListener('touchstart', () => { userInteracting = true; if (['cycling','pausing','returning'].includes(autopilot.state)) autopilot.state = 'user_control'; });
+        }
+        window.addEventListener('mouseup', () => { if (userInteracting) { userInteracting = false; autopilot.state = 'idle_wait'; autopilot.idleTimer = 0; } });
+        window.addEventListener('touchend', () => { if (userInteracting) { userInteracting = false; autopilot.state = 'idle_wait'; autopilot.idleTimer = 0; } });
+
+        async function loadAutopilotConfig(sceneId) {
+            try {
+                const resp = await fetch('data/views.json');
+                const views = await resp.json();
+                const config = views[sceneId];
+                if (!config || !config.keyframes) return;
+                autopilot.keyframes = config.keyframes;
+                autopilot.transitionDuration = config.transition_duration || 5.0;
+                autopilot.pauseAtKeyframe = config.pause_at_keyframe || 2.0;
+                autopilot.idleTimeout = config.idle_timeout || 3.0;
+                autopilot.returnSpeed = config.return_speed || 0.3;
+                setCameraFromKeyframe(autopilot.keyframes[0]);
+                startTransitionTo(1);
+                autopilot.state = autopilotEnabled ? 'cycling' : 'user_control';
+            } catch (e) { console.warn('No autopilot config:', e); }
+        }
+
+        // GT
+        async function loadGT() {
+            if (gtLoaded || !loadedScene) return;
+            const buf = await fetchBinary(`data/gt${loadedScene}.bin.gz`, () => {});
+            for (const v of viewers) v.loadGT(buf);
+            gtLoaded = true;
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            updateAutopilot();
+            for (const v of viewers) v.render();
+        }
+        animate();
+
+        window.addEventListener('resize', () => { for (const v of viewers) v.resize(); });
+
+        // Lazy load on first enter
+        let hasEnteredViewer = false;
+        let pendingScene = null;
+        window.addEventListener('viewer-enter', () => {
+            const sceneId = window.activeSceneId || '03';
+            if (loadedScene !== sceneId) loadScene(sceneId);
+            hasEnteredViewer = true;
+
+            requestAnimationFrame(() => { for (const v of viewers) v.resize(); });
+        });
+
+        // Controls
+        const pointSizeSlider = document.getElementById('pointSize');
+        const pointSizeLabel = document.getElementById('pointSizeLabel');
+        pointSizeSlider.addEventListener('input', (e) => {
+            const size = parseFloat(e.target.value);
+            pointSizeLabel.textContent = size.toFixed(1);
+            for (const v of viewers) v.setPointSize(size);
+        });
+
+        document.getElementById('btnGT').addEventListener('click', async () => {
+            await loadGT();
+            gtVisible = !gtVisible;
+            for (const v of viewers) v.setGTVisible(gtVisible);
+            document.getElementById('btnGT').classList.toggle('active', gtVisible);
+            document.getElementById('btnGT').textContent = gtVisible ? 'Hide GT' : 'Show GT';
+        });
+
+        const btnAP = document.getElementById('btnAutopilot');
+        btnAP.addEventListener('click', () => {
+            autopilotEnabled = !autopilotEnabled;
+            btnAP.classList.toggle('active', autopilotEnabled);
+            btnAP.textContent = autopilotEnabled ? 'Autopilot: ON' : 'Autopilot: OFF';
+            if (autopilotEnabled) {
+                const next = (findNearestKeyframe() + 1) % autopilot.keyframes.length;
+                startTransitionTo(next);
+                autopilot.returnDuration = Math.max(autopilot.fromPos.distanceTo(autopilot.toPos) / autopilot.returnSpeed, 0.5);
+                autopilot.state = 'returning';
+            } else { autopilot.state = 'user_control'; }
+        });
+
+        const btnSaveView = document.getElementById('btnSaveView');
+        if (btnSaveView) {
+            btnSaveView.addEventListener('click', () => {
+                const cam = viewers[0].camera, ctrl = viewers[0].controls;
+                const json = JSON.stringify({
+                    position: [+cam.position.x.toFixed(3), +cam.position.y.toFixed(3), +cam.position.z.toFixed(3)],
+                    target: [+ctrl.target.x.toFixed(3), +ctrl.target.y.toFixed(3), +ctrl.target.z.toFixed(3)],
+                    up: [+cam.up.x.toFixed(3), +cam.up.y.toFixed(3), +cam.up.z.toFixed(3)]
+                }, null, 4);
+                navigator.clipboard.writeText(json).then(() => {
+                    btnSaveView.textContent = 'Copied!';
+                    setTimeout(() => btnSaveView.textContent = 'Save View', 1500);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
