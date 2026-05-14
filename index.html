@@ -1082,6 +1082,10 @@
                 v.panel.querySelector('.loading-overlay').classList.add('hidden');
             }
 
+            // Re-apply current point size
+            const currentSize = parseFloat(document.getElementById('pointSize').value);
+            for (const v of viewers) v.setPointSize(currentSize);
+
             if (abort.signal.aborted) return;
             loadedScene = sceneId;
             isLoading = false;
