@@ -397,7 +397,7 @@
                     </span>
                     <span class="badge badge-disabled">
                         <svg width="20" height="20" viewBox="60 80 330 360" fill="currentColor"><path d="m 168.4 399.2c-5.8 0.1-11.2-3.3-13.5-8.7-2.2-5.3-0.6-9 4.2-15.9 7-10.4 78.8-96.6 78.8-96.6l-15.9-14.9c-13.4-13.4-14-31.3-1.5-43.8l18.5-17.6-51.6-63.4c-4-4.3-6.5-11.8-4.2-17.1 2.3-5.5 7.7-9.1 13.7-9.1 3.8 0.1 7.4 1.9 9.8 4.9l61.4 57 94.6-90.1c3.2-3.1 7.4-4.8 11.9-4.9 1.6 0 3.2 0.2 4.7 0.7 5.8 1.8 10.2 6.4 11.9 12.3 1.3 5.5-0.3 11.2-4.2 15.3l-83.1 100 14.9 13.8c11.1 10 11.2 27.4 0.1 37.5l-16.3 15.6 56.3 66.4 0.1 0.1 0.1 0.1c5 6.5 7.4 11.6 4.8 17.9-3.1 6-8.7 10.3-15.3 11.9-0.7 0.1-1.4 0.1-2 0.1-4.4-0.3-8.6-2.1-11.8-5.2l-0.1-0.1-0.1-0.1-65.2-59.1-89.9 86.2c0 0-5.3 6.5-11 6.6z"/></svg>
-                        arXiv (Coming Soon)
+                        arXiv (Writing Soon)
                     </span>
                     <span class="badge" id="btnDemo" style="cursor:pointer;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -1197,14 +1197,16 @@
         }
 
         // User interaction detection
-        let userInteracting = false;
+        let mouseButtons = 0;
+        let touchActive = false;
         for (const v of viewers) {
             const el = v.renderer.domElement;
-            el.addEventListener('mousedown', () => { userInteracting = true; if (['cycling','pausing','returning'].includes(autopilot.state)) autopilot.state = 'user_control'; });
-            el.addEventListener('touchstart', () => { userInteracting = true; if (['cycling','pausing','returning'].includes(autopilot.state)) autopilot.state = 'user_control'; });
+            el.addEventListener('mousedown', (e) => { mouseButtons |= (1 << e.button); if (['cycling','pausing','returning'].includes(autopilot.state)) autopilot.state = 'user_control'; });
+            el.addEventListener('touchstart', () => { touchActive = true; if (['cycling','pausing','returning'].includes(autopilot.state)) autopilot.state = 'user_control'; });
+            el.addEventListener('wheel', () => { if (['cycling','pausing','returning'].includes(autopilot.state)) { autopilot.state = 'idle_wait'; autopilot.idleTimer = 0; } else if (autopilot.state === 'idle_wait') { autopilot.idleTimer = 0; } });
         }
-        window.addEventListener('mouseup', () => { if (userInteracting) { userInteracting = false; autopilot.state = 'idle_wait'; autopilot.idleTimer = 0; } });
-        window.addEventListener('touchend', () => { if (userInteracting) { userInteracting = false; autopilot.state = 'idle_wait'; autopilot.idleTimer = 0; } });
+        window.addEventListener('mouseup', (e) => { mouseButtons &= ~(1 << e.button); if (mouseButtons === 0 && !touchActive && autopilot.state === 'user_control') { autopilot.state = 'idle_wait'; autopilot.idleTimer = 0; } });
+        window.addEventListener('touchend', (e) => { if (e.touches.length === 0) { touchActive = false; if (mouseButtons === 0 && autopilot.state === 'user_control') { autopilot.state = 'idle_wait'; autopilot.idleTimer = 0; } } });
 
         async function loadAutopilotConfig(sceneId) {
             try {
