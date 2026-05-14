@@ -191,31 +191,38 @@
 
         .scroll-down-hint {
             position: absolute;
-            bottom: 12px;
+            bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 4px;
+            gap: 0;
             cursor: pointer;
             z-index: 20;
+            padding: 6px 16px 2px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
         }
 
         .scroll-down-hint .down-arrow {
-            font-size: 3.5rem;
-            color: #aaa;
+            font-size: 2.4rem;
+            line-height: 1;
+            color: #ccc;
             animation: bounce-down 2s infinite;
         }
 
         .scroll-down-hint .down-label {
-            font-size: 0.78rem;
-            color: #888;
+            font-size: 0.7rem;
+            color: #aaa;
             letter-spacing: 0.3px;
+            margin-bottom: 2px;
         }
 
+        .scroll-down-hint:hover { background: rgba(0, 0, 0, 0.7); }
         .scroll-down-hint:hover .down-arrow { color: #fff; }
-        .scroll-down-hint:hover .down-label { color: #aaa; }
+        .scroll-down-hint:hover .down-label { color: #ddd; }
 
         @keyframes bounce-down {
             0%,100% { transform: translateY(0); opacity: 0.5; }
@@ -228,7 +235,7 @@
             justify-content: center;
             align-items: center;
             gap: 12px;
-            padding: 10px 16px 8px;
+            padding: 16px 16px 8px;
             flex-wrap: wrap;
         }
 
@@ -325,7 +332,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 16px;
+            padding: 20px 16px 8px;
             position: relative;
             z-index: 30;
         }
@@ -350,18 +357,31 @@
         }
 
         .viewer-nav .nav-center {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 2px;
+            gap: 0;
             cursor: pointer;
-            color: #aaa;
-            transition: color 0.2s;
+            padding: 2px 16px 6px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            transition: background 0.2s;
         }
 
-        .viewer-nav .nav-center:hover { color: #fff; }
-        .viewer-nav .nav-center .up-arrow { font-size: 1.2rem; line-height: 1; }
-        .viewer-nav .nav-center .up-label { font-size: 0.68rem; }
+        .viewer-nav .nav-center:hover { background: rgba(0, 0, 0, 0.7); }
+        .viewer-nav .nav-center:hover .up-arrow { color: #fff; }
+        .viewer-nav .nav-center:hover .up-label { color: #ddd; }
+        .viewer-nav .nav-center .up-arrow { font-size: 2.4rem; line-height: 1; color: #ccc; animation: bounce-up 2s infinite; }
+        .viewer-nav .nav-center .up-label { font-size: 0.7rem; color: #aaa; margin-top: 2px; }
+
+        @keyframes bounce-up {
+            0%,100% { transform: translateY(0); opacity: 0.5; }
+            50% { transform: translateY(-6px); opacity: 1; }
+        }
 
         .mouse-hints {
             display: flex;
@@ -431,7 +451,6 @@
                 </div>
                 <button id="btnGT" class="active">Hide Lidar</button>
                 <button id="btnAutopilot" class="active">Autopilot: ON</button>
-                <!-- <button id="btnSaveView">Save View</button> -->
             </div>
             <div class="mouse-hints">
                 <span>
@@ -588,7 +607,6 @@
         }
 
         function previewFrame(sceneIdx, f) {
-            if (f === sceneFrames[sceneIdx]) return;
             showFrameImages(sceneIdx, f);
         }
 
