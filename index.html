@@ -504,7 +504,7 @@
 
         const METHODS = [
             { id: 'org_img', label: 'Original', pathFn: (s) => `data/images/${s}`, ext: 'jpg' },
-            { id: 'org', label: 'DepthAnything3 (Our codebase)', pathFn: (s) => `data/depth_vis/org/${s}`, ext: 'png' },
+            { id: 'org', label: 'DepthAnything3 (Our codebase, w/o lidar prompt)', pathFn: (s) => `data/depth_vis/org/${s}`, ext: 'png' },
             { id: 'ma', label: 'MapAnything (w/ lidar prompt)', pathFn: (s) => `data/depth_vis/ma/${s}`, ext: 'png' },
             { id: 'da', label: 'DrivingDepth (Ours, w/ lidar prompt)', pathFn: (s) => `data/depth_vis/da/${s}`, ext: 'png' },
         ];
@@ -636,6 +636,24 @@
         const firstImg = strips[0][0].el.querySelector('img');
         if (firstImg.complete) initStripPositions();
         else firstImg.addEventListener('load', initStripPositions, { once: true });
+
+        // Preload all frame images so switching is instant
+        (function preloadAllImages() {
+            const preload = () => {
+                for (const scene of SCENES) {
+                    for (let f = 0; f < NUM_FRAMES; f++) {
+                        for (const method of METHODS) {
+                            for (const cam of CAMERAS) {
+                                const img = new Image();
+                                img.src = getImagePath(method, scene, cam.id, f);
+                            }
+                        }
+                    }
+                }
+            };
+            if (document.readyState === 'complete') preload();
+            else window.addEventListener('load', preload);
+        })();
 
         function wrapPosition(sceneIdx) {
             const ww = strips[sceneIdx][0].el.children[0]?.offsetWidth || 504;
@@ -943,13 +961,14 @@
             render() { this.controls.update(); this.renderer.render(this.scene, this.camera); }
         }
 
-        async function fetchBinary(url, onProgress) {
-            const response = await fetch(url);
+        async function fetchBinary(url, onProgress, signal) {
+            const response = await fetch(url, { signal });
             if (!response.ok) throw new Error(`Failed: ${response.status}`);
             const total = parseInt(response.headers.get('content-length') || '0');
             const reader = response.body.getReader();
             const chunks = []; let loaded = 0;
             while (true) {
+                if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
                 const { done, value } = await reader.read();
                 if (done) break;
                 chunks.push(value); loaded += value.length;
@@ -966,7 +985,7 @@
         // Build viewer panels
         const viewerContainer = document.getElementById('viewerContainer');
         const PANEL_CONFIGS = [
-            { label: 'DepthAnything3 (Our codebase)', prefix: 'org' },
+            { label: 'DepthAnything3 (Our codebase, w/o lidar prompt)', prefix: 'org' },
             { label: 'DrivingDepth (Ours, w/ lidar prompt)', prefix: 'da' },
             { label: 'MapAnything (w/ lidar prompt)', prefix: 'ma' },
         ];
@@ -1004,9 +1023,16 @@
         let loadedScene = null;
         let gtLoaded = false, gtVisible = false;
         let isLoading = false;
+        let loadAbort = null;
 
         async function loadScene(sceneId) {
-            if (isLoading || loadedScene === sceneId) return;
+            if (loadedScene === sceneId && !isLoading) return;
+
+            // Abort previous load if in progress
+            if (loadAbort) loadAbort.abort();
+            const abort = new AbortController();
+            loadAbort = abort;
+
             isLoading = true;
             gtLoaded = false;
             gtVisible = false;
@@ -1022,28 +1048,49 @@
                 overlay.querySelector('.progress-bar-fill').style.background = '#7a7aff';
             }
 
-            for (const v of viewers) {
-                const file = `data/${v.prefix}${sceneId}.bin.gz`;
-                const overlay = v.panel.querySelector('.loading-overlay');
-                const fill = overlay.querySelector('.progress-bar-fill');
-                const info = v.panel.querySelector('.viewer-info');
-                try {
-                    const buf = await fetchBinary(file, (p) => { fill.style.width = `${(p*100).toFixed(0)}%`; });
-                    const n = v.loadFromBinary(buf);
-                    info.textContent = `${(n/1000).toFixed(0)}K points`;
-                    overlay.classList.add('hidden');
-                } catch (e) {
-                    overlay.querySelector('.loading-text').textContent = `Error: ${e.message}`;
-                    fill.style.background = '#ff4444';
+            // Load all panels in parallel with unified progress
+            const progresses = new Array(viewers.length).fill(0);
+            function updateAllProgress() {
+                const total = progresses.reduce((a, b) => a + b, 0) / viewers.length;
+                const pct = `${(total * 100).toFixed(0)}%`;
+                for (const v of viewers) {
+                    v.panel.querySelector('.progress-bar-fill').style.width = pct;
                 }
             }
 
+            const results = await Promise.all(viewers.map(async (v, i) => {
+                if (abort.signal.aborted) return null;
+                const file = `data/${v.prefix}${sceneId}.bin.gz`;
+                try {
+                    const buf = await fetchBinary(file, (p) => { progresses[i] = p; updateAllProgress(); }, abort.signal);
+                    if (abort.signal.aborted) return null;
+                    const n = v.loadFromBinary(buf);
+                    v.panel.querySelector('.viewer-info').textContent = `${(n/1000).toFixed(0)}K points`;
+                    return true;
+                } catch (e) {
+                    if (e.name === 'AbortError' || abort.signal.aborted) return null;
+                    v.panel.querySelector('.loading-overlay .loading-text').textContent = `Error: ${e.message}`;
+                    v.panel.querySelector('.progress-bar-fill').style.background = '#ff4444';
+                    return false;
+                }
+            }));
+
+            if (abort.signal.aborted) return;
+
+            // Hide all overlays together once all loaded
+            for (const v of viewers) {
+                v.panel.querySelector('.loading-overlay').classList.add('hidden');
+            }
+
+            if (abort.signal.aborted) return;
             loadedScene = sceneId;
             isLoading = false;
+            loadAbort = null;
             loadAutopilotConfig(sceneId);
 
             // Auto-load and show GT
-            await loadGT();
+            await loadGT(abort.signal);
+            if (abort.signal.aborted) return;
             gtVisible = true;
             for (const v of viewers) v.setGTVisible(true);
             document.getElementById('btnGT').classList.add('active');
@@ -1173,11 +1220,16 @@
         }
 
         // GT
-        async function loadGT() {
+        async function loadGT(signal) {
             if (gtLoaded || !loadedScene) return;
-            const buf = await fetchBinary(`data/gt${loadedScene}.bin.gz`, () => {});
-            for (const v of viewers) v.loadGT(buf);
-            gtLoaded = true;
+            try {
+                const buf = await fetchBinary(`data/gt${loadedScene}.bin.gz`, () => {}, signal);
+                if (signal && signal.aborted) return;
+                for (const v of viewers) v.loadGT(buf);
+                gtLoaded = true;
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+            }
         }
 
         // Animation loop
@@ -1195,7 +1247,7 @@
         let pendingScene = null;
         window.addEventListener('viewer-enter', () => {
             const sceneId = window.activeSceneId || '03';
-            if (loadedScene !== sceneId) loadScene(sceneId);
+            if (loadedScene !== sceneId || isLoading) loadScene(sceneId);
             hasEnteredViewer = true;
 
             requestAnimationFrame(() => { for (const v of viewers) v.resize(); });
